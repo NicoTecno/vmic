@@ -6,6 +6,7 @@ from collections import deque
 import numpy as np
 
 from .dsp import NoiseGate, PitchShifter, SpectralDenoiser, db_to_lin
+from .formant_backend import FormantVoiceModifier
 from . import devices
 
 
@@ -18,6 +19,7 @@ class Engine:
         self.gate = NoiseGate(sr)
         self.denoiser = SpectralDenoiser()
         self.pitch = PitchShifter(sr)
+        self.female_voice = FormantVoiceModifier(sr, cfg.female_pitch, cfg.female_formant)
         self.rvc = None
         self.rvc_loading = False
         self.rvc_status = ""   # "" | "loading" | "ready" | "error: <msg>"
@@ -45,6 +47,10 @@ class Engine:
         if c.voice_mode == "pitch":
             self.pitch.set_semitones(c.pitch_semitones)
             x = self.pitch.process(x)
+        elif c.voice_mode == "female":
+            self.female_voice.set_pitch(c.female_pitch)
+            self.female_voice.set_formant(c.female_formant)
+            x = self.female_voice.process(x)
         elif c.voice_mode == "rvc" and self.rvc is not None:
             x = self.rvc.process(x)
         return x

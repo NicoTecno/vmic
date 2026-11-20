@@ -20,6 +20,8 @@ class Config:
     denoise_enabled: bool = True
     voice_mode: str = "off"        # off | pitch | rvc
     pitch_semitones: float = 0.0
+    female_pitch: float = 4.5      # semitonos para voz femenina
+    female_formant: float = 1.18   # factor de formantes (1.10 - 1.25)
     rvc_model_path: str = ""
     rvc_index_path: str = ""
     rvc_pitch: int = 0             # semitones de desplazamiento para RVC

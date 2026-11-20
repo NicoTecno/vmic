@@ -8,7 +8,12 @@ from .engine import Engine
 from .hotkeys import HotkeyManager
 from .soundboard import Soundboard
 
-MODES = {"Sin cambio": "off", "Cambio de tono (pitch)": "pitch", "IA / RVC (Messi, etc.)": "rvc"}
+MODES = {
+    "Sin cambio": "off",
+    "Cambio de tono (pitch)": "pitch",
+    "Voz Femenina (DSP / Formantes)": "female",
+    "IA / RVC (Messi, etc.)": "rvc",
+}
 MODE_BY_VALUE = {v: k for k, v in MODES.items()}
 NONE = "(ninguno)"
 PAD = dict(padx=8, pady=4)
@@ -130,6 +135,19 @@ class App:
 
         rf.columnconfigure(0, weight=1)
 
+        # ---- Ajustes Voz Femenina (DSP) ----
+        self._female_lf = ttk.LabelFrame(r, text="Ajustes Voz Femenina (DSP / Formantes)")
+        self._female_visible = False
+        ff = self._female_lf
+        sf_fem = ttk.Frame(ff)
+        sf_fem.pack(fill="x", padx=6, pady=4)
+        self.female_pitch_var = tk.DoubleVar(value=c.female_pitch)
+        self.female_formant_var = tk.DoubleVar(value=c.female_formant)
+        self._slider(sf_fem, 0, "Tono (semitonos)", self.female_pitch_var, 0.0, 10.0, col=0)
+        self._slider(sf_fem, 0, "Timbre / Formantes", self.female_formant_var, 1.0, 1.35, col=1)
+        ttk.Label(ff, text="💡 Recomendado: Tono en +4.0 a +5.0 st y Formantes en 1.16 a 1.22 para voz femenina natural.",
+                  foreground="#555555").pack(anchor="w", padx=8, pady=(0, 4))
+
         # ---- Soundboard ----
         self._sb_lf = ttk.LabelFrame(r, text="Soundboard  (clic = reproducir · clic derecho = opciones)")
         self._sb_lf.pack(fill="both", expand=True, **PAD)
@@ -148,6 +166,7 @@ class App:
         # Traces — llaman a apply() ante cualquier cambio
         for v in (self.gain, self.denoise, self.gate, self.thr, self.mode, self.pitch,
                   self.monv, self.mons, self.vol, self.mute,
+                  self.female_pitch_var, self.female_formant_var,
                   self.rvc_pitch_var, self.rvc_rate_var):
             v.trace_add("write", lambda *a: self.apply())
 
@@ -158,8 +177,8 @@ class App:
         ttk.Scale(parent, from_=lo, to=hi, variable=var, length=160).grid(row=row, column=col * 3 + 1, padx=4)
         lbl = ttk.Label(parent, width=6)
         lbl.grid(row=row, column=col * 3 + 2)
-        var.trace_add("write", lambda *a: lbl.config(text=f"{var.get():.1f}"))
-        lbl.config(text=f"{var.get():.1f}")
+        var.trace_add("write", lambda *a: lbl.config(text=f"{var.get():.2f}" if hi < 2 else f"{var.get():.1f}"))
+        lbl.config(text=f"{var.get():.2f}" if hi < 2 else f"{var.get():.1f}")
 
     # ------------------------------------------------------------ lógica
     def apply(self):
@@ -172,29 +191,44 @@ class App:
         # El error aparece solo cuando el usuario aprieta "Cargar modelo".
         c.voice_mode, c.pitch_semitones = mode, self.pitch.get()
         c.monitor_voice, c.monitor_sounds, c.sounds_volume = self.monv.get(), self.mons.get(), self.vol.get()
-        c.rvc_pitch       = int(round(self.rvc_pitch_var.get()))
-        c.rvc_index_rate  = self.rvc_rate_var.get()
+        c.female_pitch   = self.female_pitch_var.get()
+        c.female_formant = self.female_formant_var.get()
+        c.rvc_pitch      = int(round(self.rvc_pitch_var.get()))
+        c.rvc_index_rate = self.rvc_rate_var.get()
         self.engine.muted = self.mute.get()
+
+        # Actualizar voz femenina en caliente
+        self.engine.female_voice.set_pitch(c.female_pitch)
+        self.engine.female_voice.set_formant(c.female_formant)
 
         # Actualizar parámetros RVC en caliente si el modelo ya está cargado
         if self.engine.rvc is not None:
             self.engine.rvc.set_pitch(c.rvc_pitch)
             self.engine.rvc.set_index_rate(c.rvc_index_rate)
 
-        # Mostrar/ocultar sección RVC según el modo elegido
-        self._set_rvc_visible(mode == "rvc")
+        # Mostrar/ocultar paneles según el modo elegido
+        self._update_mode_panels(mode)
 
-    def _set_rvc_visible(self, show: bool):
-        if show == self._rvc_visible:
+    def _update_mode_panels(self, mode: str):
+        show_rvc = (mode == "rvc")
+        show_fem = (mode == "female")
+        if show_rvc == self._rvc_visible and show_fem == self._female_visible:
             return
-        if show:
-            # Sacamos el soundboard, insertamos RVC, volvemos a poner el soundboard
-            self._sb_lf.pack_forget()
+
+        self._sb_lf.pack_forget()
+        if show_rvc:
             self._rvc_lf.pack(fill="x", **PAD)
-            self._sb_lf.pack(fill="both", expand=True, **PAD)
         else:
             self._rvc_lf.pack_forget()
-        self._rvc_visible = show
+
+        if show_fem:
+            self._female_lf.pack(fill="x", **PAD)
+        else:
+            self._female_lf.pack_forget()
+
+        self._sb_lf.pack(fill="both", expand=True, **PAD)
+        self._rvc_visible = show_rvc
+        self._female_visible = show_fem
 
     def refresh_devices(self):
         try:
