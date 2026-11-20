@@ -167,8 +167,9 @@ class App:
         c.mic_gain_db, c.denoise_enabled = self.gain.get(), self.denoise.get()
         c.gate_enabled, c.gate_threshold_db = self.gate.get(), self.thr.get()
         mode = MODES.get(self.mode.get(), "off")
-        if mode == "rvc" and not rvc_backend.available():
-            mode = "off"
+        # NO bloqueamos el modo rvc aunque el backend aún no esté listo:
+        # el engine ya maneja self.rvc == None sin romperse.
+        # El error aparece solo cuando el usuario aprieta "Cargar modelo".
         c.voice_mode, c.pitch_semitones = mode, self.pitch.get()
         c.monitor_voice, c.monitor_sounds, c.sounds_volume = self.monv.get(), self.mons.get(), self.vol.get()
         c.rvc_pitch       = int(round(self.rvc_pitch_var.get()))
@@ -180,16 +181,20 @@ class App:
             self.engine.rvc.set_pitch(c.rvc_pitch)
             self.engine.rvc.set_index_rate(c.rvc_index_rate)
 
-        # Mostrar/ocultar sección RVC
+        # Mostrar/ocultar sección RVC según el modo elegido
         self._set_rvc_visible(mode == "rvc")
 
     def _set_rvc_visible(self, show: bool):
-        if show and not self._rvc_visible:
-            self._rvc_lf.pack(fill="x", before=self._sb_lf, **PAD)
-            self._rvc_visible = True
-        elif not show and self._rvc_visible:
+        if show == self._rvc_visible:
+            return
+        if show:
+            # Sacamos el soundboard, insertamos RVC, volvemos a poner el soundboard
+            self._sb_lf.pack_forget()
+            self._rvc_lf.pack(fill="x", **PAD)
+            self._sb_lf.pack(fill="both", expand=True, **PAD)
+        else:
             self._rvc_lf.pack_forget()
-            self._rvc_visible = False
+        self._rvc_visible = show
 
     def refresh_devices(self):
         try:
